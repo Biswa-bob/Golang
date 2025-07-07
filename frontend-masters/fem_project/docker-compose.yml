@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+    db:
+        container_name: 'workoutDB'
+        image: postgres:17-alpine
+        volumes:
+            - './database/postgres-data:/var/lib/postgresql/data:rw'
+        ports:
+            - '5432:5432'
+        networks:
+            - pgnetwork
+        environment:
+            POSTGRES_DB: 'postgres'
+            POSTGRES_USER: 'postgres'
+            POSTGRES_PASSWORD: 'postgres'
+        restart: unless-stopped
+    pgadmin:
+        image: dpage/pgadmin4
+        container_name: pgadmin
+        environment:
+            PGADMIN_DEFAULT_EMAIL: admin@example.com
+            PGADMIN_DEFAULT_PASSWORD: admin123
+        ports:
+            - '8888:80'
+        networks:
+            - pgnetwork
+        depends_on:
+            - db
+
+volumes:
+    postgres_data:
+
+networks:
+    pgnetwork:
