@@ -6,6 +6,7 @@ import (
 
 type Workout struct {
 	ID              int            `json:"id"`
+	UserID          int            `json:"user_id"`
 	Title           string         `json:"title"`
 	Description     string         `json:"description"`
 	DurationMinutes int            `json:"duration_minutes"`
@@ -15,7 +16,7 @@ type Workout struct {
 
 type WorkoutEntry struct {
 	ID              int      `json:"id"`
-	ExerciseName    string   `json:"exercise_name"`
+	ExerciseName    string   `json:"exercise"`
 	Sets            *int     `json:"sets"`
 	Reps            *int     `json:"reps"`
 	DurationSeconds *int     `json:"duration_seconds"`
@@ -36,6 +37,8 @@ type WorkoutStore interface {
 	CreateWorkout(*Workout) (*Workout, error)
 	GetWorkoutByID(id int64) (*Workout, error)
 	UpdateWorkout(*Workout) error
+	DeleteWorkout(id int64) error
+	GetWorkoutOwner(id int64) (int, error)
 }
 
 func (pg *PostgresWorkoutStore) CreateWorkout(workout *Workout) (*Workout, error) {
@@ -47,11 +50,11 @@ func (pg *PostgresWorkoutStore) CreateWorkout(workout *Workout) (*Workout, error
 
 	query :=
 		`
-	INSERT INTO workouts (title, description, duration_minutes, calories_burned)
-	VALUES($1, $2, $3, $4)
+	INSERT INTO workouts (user_id, title, description, duration_minutes, calories_burned)
+	VALUES($1, $2, $3, $4, $5)
 	RETURNING id
 	`
-	err = tx.QueryRow(query, workout.Title, workout.Description, workout.DurationMinutes, workout.CaloriesBurned).Scan(&workout.ID)
+	err = tx.QueryRow(query, workout.UserID, workout.Title, workout.Description, workout.DurationMinutes, workout.CaloriesBurned).Scan(&workout.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +132,7 @@ func (pg *PostgresWorkoutStore) GetWorkoutByID(id int64) (*Workout, error) {
 	return workout, nil
 }
 
-func (pg *PostgresWorkoutStore) UpdateWorkoutStore(workout *Workout) error {
+func (pg *PostgresWorkoutStore) UpdateWorkout(workout *Workout) error {
 	tx, err := pg.db.Begin()
 	if err != nil {
 		return err
@@ -165,7 +168,7 @@ func (pg *PostgresWorkoutStore) UpdateWorkoutStore(workout *Workout) error {
 	for _, entry := range workout.Entries {
 		query :=
 			`
-		INSERT INTO workout_entries (workout_id, exercise_name, sets, reps, duration_seconds, weight, notes, order_index)
+		INSERT INTO workout_entries (workout_id, exercise, sets, reps, duration_seconds, weight, notes, order_index)
 		VALUES($1, $2, $3, $4, $5, $6, $7, $8)
 		`
 
@@ -185,4 +188,40 @@ func (pg *PostgresWorkoutStore) UpdateWorkoutStore(workout *Workout) error {
 		}
 	}
 	return tx.Commit()
+}
+
+func (pg *PostgresWorkoutStore) DeleteWorkout(id int64) error {
+	query := `
+	DELETE FROM workouts
+	WHERE id = $1
+	`
+
+	result, err := pg.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+
+}
+
+func (pg *PostgresWorkoutStore) GetWorkoutOwner(workoutID int64) (int, error) {
+	var userID int
+
+	query := `
+	SELECT user_id
+	FROM workouts
+	WHERE id =$1
+	`
+	err := pg.db.QueryRow(query, workoutID).Scan(&userID)
+	if err != nil {
+		return 0, err
+	}
+	return userID, nil
 }
